@@ -20,6 +20,13 @@ import {
   Clock
 } from 'lucide-react';
 
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return '***';
+  const [local, domain] = email.split('@');
+  if (local.length <= 2) return `${local[0]}*@${domain}`;
+  return `${local.slice(0, 2)}***${local.slice(-1)}@${domain}`;
+}
+
 function getOrCreateDeviceId() {
   let id = localStorage.getItem('archon_device_id');
   if (!id) {
@@ -570,7 +577,7 @@ export default function AuthModal() {
                 We sent a 6-digit security code via Brevo to:
               </p>
               <div className="inline-block bg-slate-100 text-slate-800 font-mono text-xs px-3 py-1 rounded-full font-bold">
-                {email}
+                {maskEmail(email)}
               </div>
             </div>
 
@@ -735,7 +742,7 @@ export default function AuthModal() {
             <div className="space-y-1 text-center">
               <p className="text-xs text-slate-600">Enter code sent to:</p>
               <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
-                {email}
+                {maskEmail(email)}
               </span>
             </div>
 

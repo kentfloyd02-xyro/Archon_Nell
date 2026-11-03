@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CheckCircle2, X, RefreshCw, Loader2, ShieldCheck } from 'lucide-react';
 
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return '***';
+  const [local, domain] = email.split('@');
+  if (local.length <= 2) return `${local[0]}*@${domain}`;
+  return `${local.slice(0, 2)}***${local.slice(-1)}@${domain}`;
+}
+
 export default function OtpModal() {
   const { otpState, setOtpState, verifyOtpCode, triggerOtp, showToast } = useApp();
   const [code, setCode] = useState('');
@@ -83,7 +90,7 @@ export default function OtpModal() {
             We have dispatched a 6-digit verification code to:
           </p>
           <div className="inline-block bg-blue-50 text-blue-800 font-mono text-xs px-3 py-1 rounded-full font-bold border border-blue-200">
-            {otpState.email}
+            {maskEmail(otpState.email)}
           </div>
         </div>
 

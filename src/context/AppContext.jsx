@@ -20,11 +20,15 @@ export function AppProvider({ children }) {
     setIsApiLoading(true);
     setApiError(null);
     try {
-      const [liveProducts, liveOrders, liveReviews, liveProjects] = await Promise.all([
-        api.getProducts(),
-        api.getOrders(),
-        api.getReviews(),
-        api.getProjects()
+      // Products, Reviews, and Projects are public store catalog data.
+      // Orders require an authenticated user token (protect route).
+      const token = localStorage.getItem('archon_token');
+
+      const [liveProducts, liveReviews, liveProjects, liveOrders] = await Promise.all([
+        api.getProducts().catch(() => []),
+        api.getReviews().catch(() => []),
+        api.getProjects().catch(() => []),
+        token ? api.getOrders().catch(() => []) : Promise.resolve([])
       ]);
 
       if (Array.isArray(liveProducts)) {
@@ -41,6 +45,8 @@ export function AppProvider({ children }) {
           id: o.orderNumber || o._id,
           date: o.date || (o.createdAt ? new Date(o.createdAt).toISOString() : new Date().toISOString())
         })));
+      } else {
+        setOrders([]);
       }
 
       if (Array.isArray(liveReviews)) {
@@ -158,6 +164,9 @@ export function AppProvider({ children }) {
     setCurrentUser(user);
     setIsAuthOpen(false);
 
+    // Refresh orders now that token is present
+    refreshAllData();
+
     if (user.role === 'admin') {
       setCurrentView('admin-dashboard');
       showToast(`Welcome Administrator, ${user.name}!`, 'success');
@@ -175,6 +184,7 @@ export function AppProvider({ children }) {
     localStorage.removeItem('archon_token');
     localStorage.removeItem('archon_user');
     setCurrentUser(null);
+    setOrders([]);
     setCurrentView('store');
     showToast('Signed out successfully.', 'info');
   };
