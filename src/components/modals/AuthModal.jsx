@@ -525,12 +525,7 @@ export default function AuthModal() {
               </div>
             </div>
 
-            {/* Password Policy info hint */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50/70 border border-blue-200/60 rounded-xl text-[11px] text-blue-700">
-              <Info className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-              <span>Max 5 attempts allowed. Policy: Min 8 chars with upper, lower, number & symbol.</span>
-            </div>
-
+          
             <button
               type="submit"
               disabled={loading}
