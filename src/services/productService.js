@@ -1,33 +1,37 @@
 import { request } from './client';
 
 export const productService = {
+  getCategories: () =>
+    request('/shop/categories').catch(() => []),
+
   getProducts: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return request(`/products${query ? `?${query}` : ''}`);
+    return request(`/shop/products${query ? `?${query}` : ''}`);
   },
 
-  getProduct: (id) => request(`/products/${id}`),
+  getProduct: (id) =>
+    request(`/shop/products/${id}`),
 
   updateStock: (id, delta) =>
-    request(`/products/${id}/stock`, {
+    request(`/shop/products/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ delta })
+      body: JSON.stringify({ stockDelta: delta })
     }),
 
   createProduct: (data) =>
-    request('/products', {
+    request('/shop/products', {
       method: 'POST',
       body: JSON.stringify(data)
     }),
 
   updateProduct: (id, data) =>
-    request(`/products/${id}`, {
+    request(`/shop/products/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
     }),
 
   deleteProduct: (id) =>
-    request(`/products/${id}`, {
+    request(`/shop/products/${id}`, {
       method: 'DELETE'
     })
 };

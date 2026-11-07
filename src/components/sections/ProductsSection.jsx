@@ -1,5 +1,5 @@
 import React from 'react';
-import { useApp } from '../../context/AppContext';
+import { useProductsSectionController } from '../../controllers/ProductsSectionController';
 import { 
   ShoppingCart, 
   Sparkles, 
@@ -11,58 +11,19 @@ import {
 } from 'lucide-react';
 
 export default function ProductsSection() {
-  const { 
-    products, 
-    addToCart, 
-    setIsCheckoutOpen,
-    setSelectedProductForReview, 
-    setIsReviewsOpen,
-    searchQuery,
+  const {
+    categories,
+    filteredProducts,
     selectedCategory,
     setSelectedCategory,
-    currentUser,
-    setIsAuthOpen,
-    showToast,
+    searchQuery,
+    handleBuyNow,
+    handleOpenReviews,
+    addToCart,
     isApiConnected,
     isApiLoading,
     refreshAllData
-  } = useApp();
-
-  const categories = [
-    { id: 'all', label: 'All Products' },
-    { id: 'mortar', label: 'Self-Leveling Mortar' },
-    { id: 'epoxy', label: 'Structural Epoxy' },
-    { id: 'admixture', label: 'Admixtures & Plasticizers' },
-    { id: 'waterproof', label: 'Waterproofing Membranes' }
-  ];
-
-  // Filtering
-  const filteredProducts = products.filter(product => {
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    const query = searchQuery.toLowerCase().trim();
-    const matchesSearch = !query || 
-      product.title.toLowerCase().includes(query) ||
-      product.category.toLowerCase().includes(query) ||
-      product.specs.some(spec => spec.toLowerCase().includes(query));
-    
-    return matchesCategory && matchesSearch;
-  });
-
-  const handleBuyNow = (product) => {
-    if (!currentUser) {
-      showToast('Please sign in to your account first before using Buy Now.', 'warning');
-      setIsAuthOpen(true);
-      return;
-    }
-    if (product.stock <= 0) return;
-    addToCart(product, 1);
-    setIsCheckoutOpen(true);
-  };
-
-  const handleOpenReviews = (product) => {
-    setSelectedProductForReview(product);
-    setIsReviewsOpen(true);
-  };
+  } = useProductsSectionController();
 
   return (
     <section id="products" className="py-16 sm:py-20 bg-white border-b border-slate-200">
@@ -128,7 +89,7 @@ export default function ProductsSection() {
             </div>
             <h3 className="text-base font-bold text-rose-900">Cloud Database / API Offline</h3>
             <p className="text-xs text-rose-700 mt-1 max-w-md mx-auto">
-              Hindi mag-lo-load ang data hangga't walang koneksyon sa API server at online MongoDB database. Pakisiguradong bukas ang serbisyo.
+              Live catalog data cannot load until the backend API server is online. Please make sure the backend service is running.
             </p>
             <button
               onClick={refreshAllData}
@@ -162,12 +123,16 @@ export default function ProductsSection() {
                   <div className="relative bg-gradient-to-b from-slate-100 to-slate-50 p-4 sm:p-6 flex items-center justify-center h-52 sm:h-60 overflow-hidden">
                     {/* Badge */}
                     <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-                      <span className="bg-[#0b1b3d] text-white text-[10px] font-extrabold px-2.5 py-1 rounded-md shadow-sm">
-                        {product.badge}
-                      </span>
-                      <span className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
-                        {product.discount}
-                      </span>
+                      {product.badge ? (
+                        <span className="bg-[#0b1b3d] text-white text-[10px] font-extrabold px-2.5 py-1 rounded-md shadow-sm">
+                          {product.badge}
+                        </span>
+                      ) : null}
+                      {product.discount ? (
+                        <span className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+                          {product.discount}
+                        </span>
+                      ) : null}
                     </div>
 
                     {/* Stock indicator badge */}
@@ -232,16 +197,18 @@ export default function ProductsSection() {
                       </h3>
 
                       {/* Specs */}
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {product.specs.map((spec, i) => (
-                          <span
-                            key={i}
-                            className="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded-md"
-                          >
-                            {spec}
-                          </span>
-                        ))}
-                      </div>
+                      {Array.isArray(product.specs) && product.specs.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {product.specs.map((spec, i) => (
+                            <span
+                              key={i}
+                              className="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded-md"
+                            >
+                              {spec}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Pricing & Actions */}
@@ -249,11 +216,13 @@ export default function ProductsSection() {
                       <div className="flex items-baseline justify-between">
                         <div>
                           <span className="text-lg sm:text-xl font-extrabold text-blue-600">
-                            PHP {product.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            PHP {Number(product.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                           </span>
-                          <span className="text-xs text-slate-400 line-through ml-2">
-                            PHP {product.originalPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </span>
+                          {product.originalPrice && Number(product.originalPrice) > Number(product.price) && (
+                            <span className="text-xs text-slate-400 line-through ml-2">
+                              PHP {Number(product.originalPrice).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </span>
+                          )}
                         </div>
                         <span className="text-[11px] text-slate-500 font-medium">Standard Pack</span>
                       </div>

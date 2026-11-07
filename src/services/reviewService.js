@@ -1,10 +1,16 @@
 import { request } from './client';
 
 export const reviewService = {
-  getReviews: (productId = null) => request(productId ? `/reviews/${productId}` : '/reviews'),
+  getReviews: (productId = null) => {
+    if (!productId) {
+      // In arch_api, reviews are strictly fetched per product: GET /shop/reviews/:productId
+      return Promise.resolve([]);
+    }
+    return request(`/shop/reviews/${productId}`).catch(() => []);
+  },
 
   addReview: (reviewData) =>
-    request('/reviews', {
+    request('/shop/reviews', {
       method: 'POST',
       body: JSON.stringify(reviewData)
     }),

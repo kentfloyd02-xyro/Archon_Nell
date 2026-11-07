@@ -1,29 +1,27 @@
-const rawApiBase = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? `${window.location.origin}/api` : 'http://localhost:5000/api');
-const cleanApiBase = rawApiBase.replace(/\/+$/, '');
-export const API_BASE = cleanApiBase.endsWith('/api') ? cleanApiBase : `${cleanApiBase}/api`;
-export const BASE_URL = (import.meta.env.VITE_BASE_URL || API_BASE.replace(/\/api$/, '') || 'http://localhost:5000').replace(/\/+$/, '');
+const rawApiBase =
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? `${window.location.origin}/api/v1`
+    : 'http://localhost:4000/api/v1');
+
+export const API_BASE = rawApiBase.replace(/\/+$/, '');
+export const BASE_URL = (
+  import.meta.env.VITE_BASE_URL ||
+  API_BASE.replace(/\/api\/v1$/, '').replace(/\/api$/, '') ||
+  'http://localhost:4000'
+).replace(/\/+$/, '');
 
 export async function request(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE}${cleanEndpoint}`;
   const token = localStorage.getItem('archon_token');
 
   const headers = {
-    ...options.headers,
+    ...options.headers
   };
 
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const userStr = localStorage.getItem('archon_user');
-  if (userStr) {
-    try {
-      const u = JSON.parse(userStr);
-      if (u?.email && !headers['X-User-Email']) headers['X-User-Email'] = u.email;
-      if (u?.name && !headers['X-User-Name']) headers['X-User-Name'] = u.name;
-      if (u?.role && !headers['X-User-Role']) headers['X-User-Role'] = u.role;
-      if ((u?._id || u?.id) && !headers['X-User-Id']) headers['X-User-Id'] = u._id || u.id;
-    } catch {}
   }
 
   if (!(options.body instanceof FormData) && !headers['Content-Type']) {
@@ -35,9 +33,14 @@ export async function request(endpoint, options = {}) {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      const errorMsg = data.error || data.message || `Request failed with status ${res.status}`;
+      const errorMsg =
+        data.error?.message ||
+        data.message ||
+        data.error ||
+        `Request failed with status ${res.status}`;
       const err = new Error(errorMsg);
       err.status = res.status;
+      err.code = data.error?.code;
       err.forcePasswordReset = Boolean(data.forcePasswordReset);
       err.otpAborted = Boolean(data.otpAborted);
       err.remainingAttempts = data.remainingAttempts;
@@ -45,18 +48,20 @@ export async function request(endpoint, options = {}) {
       throw err;
     }
 
-    return data;
+    // In arch_api, standard response format is { success: true, data: [...] }
+    return data.data !== undefined ? data.data : data;
   } catch (err) {
-    console.error(`[API Error] ${endpoint}:`, err.message);
     throw err;
   }
 }
 
 export async function checkApiHealth() {
   try {
-    const res = await fetch(`${BASE_URL}/`, { method: 'GET' });
+    const res = await fetch(`${BASE_URL}/health`, { method: 'GET' });
     return res.ok;
   } catch {
     return false;
   }
 }
+
+export default { API_BASE, BASE_URL, request, checkApiHealth };

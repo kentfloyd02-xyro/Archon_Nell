@@ -25,7 +25,7 @@ import Toast from './components/ui/Toast';
 function AppContent() {
   const { currentView, isApiConnected, isApiLoading, refreshAllData } = useApp();
 
-  // Kung hindi pa connected sa backend API, LOADING LANG ang buong website
+  // Wait for active connection to online backend API
   if (!isApiConnected || isApiLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#0b1b3d] text-white p-6 relative overflow-hidden">
@@ -48,11 +48,11 @@ function AppContent() {
 
           <div className="mt-8 flex items-center gap-2.5 bg-slate-800/80 border border-slate-700/60 px-4 py-2 rounded-xl text-xs text-slate-300 backdrop-blur-sm">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-            <span>Naghihintay sa Backend API & Database...</span>
+            <span>Connecting to Backend API & Database...</span>
           </div>
 
           <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
-            Pakibuksan ang backend server sa terminal gamit ang:
+            Please start the backend server in your terminal:
             <br />
             <code className="inline-block mt-1.5 px-3 py-1 bg-slate-900 border border-slate-700 rounded-md font-mono text-amber-300 text-xs">
               npm run dev
@@ -63,7 +63,7 @@ function AppContent() {
             onClick={() => refreshAllData?.()}
             className="mt-6 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow transition-all active:scale-95"
           >
-            I-check ang Koneksyon
+            Check Connection
           </button>
         </div>
       </div>
@@ -80,16 +80,16 @@ function AppContent() {
 
       {/* Backend API Offline Alert Banner */}
       {!isApiConnected && !isApiLoading && (
-        <div className="bg-rose-600 text-white px-4 py-2.5 shadow-md border-b border-rose-700 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs z-40 sticky top-0 sm:top-[72px]">
+        <div className="bg-amber-600 text-white px-4 py-2.5 shadow-md border-b border-amber-700 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs z-40 sticky top-0 sm:top-[72px]">
           <div className="flex items-center gap-2 text-center sm:text-left">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping shrink-0" />
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-200 animate-ping shrink-0" />
             <span>
-              <strong>Cloud Database / API Offline:</strong> Hindi mag-lo-load ang live catalog at database records hangga't hindi online ang API server at MongoDB cloud database.
+              <strong>Backend Disconnected:</strong> Please run the backend server in terminal (<code className="bg-amber-700 px-1.5 py-0.5 rounded font-mono">cd arch_api && npm run dev</code>) for live database synchronization.
             </span>
           </div>
           <button
             onClick={refreshAllData}
-            className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 font-bold rounded-lg shadow-sm text-xs shrink-0 transition-all active:scale-95"
+            className="px-3 py-1 bg-white hover:bg-amber-50 text-amber-800 font-bold rounded-lg shadow-sm text-xs shrink-0 transition-all active:scale-95"
           >
             Retry Connection
           </button>

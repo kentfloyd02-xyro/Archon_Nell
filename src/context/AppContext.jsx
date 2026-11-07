@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { api } from '../services/api';
+import { api, checkApiHealth } from '../services/api';
 
 const AppContext = createContext();
 
@@ -24,62 +24,124 @@ export function AppProvider({ children }) {
       // Orders require an authenticated user token (protect route).
       const token = localStorage.getItem('archon_token');
 
-      const [liveProducts, liveReviews, liveProjects, liveOrders] = await Promise.all([
-        api.getProducts().catch(() => []),
-        api.getReviews().catch(() => []),
-        api.getProjects().catch(() => []),
-        token ? api.getOrders().catch(() => []) : Promise.resolve([])
+      // Check health first or fetch alongside
+      const healthPromise = checkApiHealth().catch(() => false);
+
+      const [isHealthy, liveProducts, liveOrders] = await Promise.all([
+        healthPromise,
+        api.getProducts().catch(() => null),
+        token ? api.getOrders().catch(() => null) : Promise.resolve(null)
       ]);
 
-      if (Array.isArray(liveProducts)) {
-        setProducts(liveProducts.map(p => ({
+      let formattedProducts = [];
+      if (Array.isArray(liveProducts) && liveProducts.length > 0) {
+        formattedProducts = liveProducts.map(p => ({
           ...p,
-          id: p.customId || p._id || p.id,
-          shippingWeightKg: p.shippingWeightKg || 20,
-        })));
+          dbId: p.id, // Preserve raw PostgreSQL UUID for reviews query
+          id: p.customId || p.custom_id || p._id || p.id,
+          image: (Array.isArray(p.images) && p.images[0]) || p.image || '/assets/images/leveling_mortar_1785519746126.png',
+          category: p.categorySlug || p.category_slug || p.category || 'all',
+          shippingWeightKg: p.shippingWeightKg || p.shipping_weight_kg || 20,
+          sold: p.sold || p.sold_count || 0,
+          badge: p.badge || (p.is_featured ? 'STORE PREFERRED' : ''),
+          specs: Array.isArray(p.specs) ? p.specs : (p.specs && typeof p.specs === 'object' ? Object.values(p.specs) : []),
+          rating: Number(p.average_rating || p.rating || 5.0),
+          originalPrice: p.originalPrice || p.original_price || Number(p.price),
+          discount: p.discount || ''
+        }));
+        setProducts(formattedProducts);
+      } else {
+        setProducts([]);
       }
 
-      if (Array.isArray(liveOrders)) {
-        setOrders(liveOrders.map(o => ({
-          ...o,
-          id: o.orderNumber || o._id,
-          date: o.date || (o.createdAt ? new Date(o.createdAt).toISOString() : new Date().toISOString())
-        })));
+      if (Array.isArray(liveOrders) && liveOrders.length > 0) {
+        setOrders(liveOrders.map(o => {
+          const rawTotal = Number(o.totalAmount ?? o.total_amount ?? o.total ?? 0);
+          const rawSubtotal = Number(o.subtotal ?? 0);
+          const rawShipping = Number(o.shippingFee ?? o.shipping_fee ?? 0);
+          const rawDiscount = Number(o.discountAmount ?? o.discount_amount ?? o.discount ?? 0);
+          const rawStatus = (o.status || o.delivery_status || 'DELIVERED').toUpperCase();
+
+          return {
+            ...o,
+            id: o.orderNumber || o.order_number || o._id || o.id,
+            orderNumber: o.orderNumber || o.order_number || o.id,
+            customerName: o.customerName || o.customer_name || 'Customer',
+            customerEmail: o.customerEmail || o.customer_email || '',
+            customerPhone: o.customerPhone || o.customer_phone || '',
+            deliveryAddress: o.deliveryAddress || o.delivery_address || '',
+            deliveryNotes: o.deliveryNotes || o.delivery_notes || '',
+            paymentMethod: o.paymentMethod || o.payment_method || 'GCash',
+            gcashRefNumber: o.gcashRefNumber || o.gcash_ref_number || '',
+            status: rawStatus,
+            deliveryStatus: rawStatus,
+            totalAmount: rawTotal,
+            subtotal: rawSubtotal,
+            shippingFee: rawShipping,
+            discountAmount: rawDiscount,
+            discountType: o.discountType || o.discount_type || '',
+            items: Array.isArray(o.items) ? o.items : (Array.isArray(o.order_items) ? o.order_items : []),
+            trackingTimeline: o.trackingTimeline || o.tracking_steps || [],
+            date: o.date || (o.createdAt ? new Date(o.createdAt).toISOString() : (o.created_at ? new Date(o.created_at).toISOString() : new Date().toISOString()))
+          };
+        }));
       } else {
         setOrders([]);
       }
 
-      if (Array.isArray(liveReviews)) {
+      // Query reviews per product using raw database UUID (GET /shop/reviews/:productId)
+      const targetProducts = formattedProducts;
+      const reviewResults = await Promise.all(
+        targetProducts.map(p => {
+          const queryId = p.dbId || p.id;
+          const customKey = p.customId || p.custom_id || p.id;
+          return api.getReviews(queryId)
+            .then(revs => (Array.isArray(revs) ? revs.map(r => ({
+              ...r,
+              productCustomId: customKey,
+              productId: customKey
+            })) : []))
+            .catch(() => []);
+        })
+      );
+
+      const allProductReviews = reviewResults.flat();
+      if (allProductReviews.length > 0) {
         const grouped = {};
-        liveReviews.forEach(r => {
-          const key = r.productCustomId || (r.productId && (r.productId.customId || r.productId)) || 'prod-1';
+        allProductReviews.forEach(r => {
+          const key = r.productCustomId || r.productId || 'prod-1';
           if (!grouped[key]) grouped[key] = [];
           grouped[key].push({
-            id: r._id || `rev-${Date.now()}-${Math.random()}`,
-            userName: r.userName,
-            rating: r.rating,
+            id: r._id || r.id || `rev-${Date.now()}-${Math.random()}`,
+            userName: r.userName || r.customer_name || 'Customer',
+            rating: Number(r.rating || 5),
             date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : (r.date || new Date().toISOString().slice(0, 10)),
-            comment: r.comment,
-            verified: Boolean(r.verified)
+            comment: r.comment || '',
+            verified: Boolean(r.is_verified_purchase ?? r.verified)
           });
         });
         setReviews(grouped);
+      } else {
+        setReviews({});
       }
 
-      if (Array.isArray(liveProjects)) {
-        setProjects(liveProjects);
-      }
+      // Load engineering projects showcase
+      const liveProjects = await api.getProjects().catch(() => []);
+      setProjects(Array.isArray(liveProjects) ? liveProjects : []);
 
-      setIsApiConnected(true);
-      setApiError(null);
+      const connected = Boolean(isHealthy || (liveProducts && liveProducts.length >= 0));
+      setIsApiConnected(connected);
+      if (connected) {
+        setApiError(null);
+      }
     } catch (err) {
       console.warn('[Backend API Offline]', err.message);
       setIsApiConnected(false);
-      setApiError(err.message || 'Unable to connect to backend API server and cloud database');
+      setApiError(err.message || 'Unable to connect to backend API server and database');
       setProducts([]);
-      setOrders([]);
-      setReviews({});
       setProjects([]);
+      setReviews({});
+      setOrders([]);
     } finally {
       setIsApiLoading(false);
     }
@@ -88,16 +150,6 @@ export function AppProvider({ children }) {
   useEffect(() => {
     refreshAllData();
   }, [refreshAllData]);
-
-  // Auto-retry polling every 3 seconds if backend API is not yet connected
-  useEffect(() => {
-    if (!isApiConnected) {
-      const interval = setInterval(() => {
-        refreshAllData();
-      }, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [isApiConnected, refreshAllData]);
 
   const [cart, setCart] = useState(() => {
     try {
@@ -446,7 +498,35 @@ export function AppProvider({ children }) {
       };
 
       const backendOrder = await api.createOrder(payload);
-      const savedOrder = backendOrder.order || backendOrder;
+      const raw = backendOrder.order || backendOrder;
+      const savedOrder = {
+        ...raw,
+        id: raw.orderNumber || raw.order_number || raw.id || payload.orderNumber,
+        orderNumber: raw.orderNumber || raw.order_number || raw.id,
+        date: raw.date || raw.createdAt || raw.created_at || new Date().toISOString(),
+        createdAt: raw.createdAt || raw.created_at || raw.date || new Date().toISOString(),
+        customerName: raw.customerName || raw.customer_name || orderData.customerName,
+        customerEmail: raw.customerEmail || raw.customer_email || orderData.customerEmail,
+        customerPhone: raw.customerPhone || raw.customer_phone || orderData.customerPhone,
+        deliveryAddress: raw.deliveryAddress || raw.delivery_address || orderData.deliveryAddress,
+        deliveryNotes: raw.deliveryNotes || raw.delivery_notes || orderData.deliveryNotes || '',
+        paymentMethod: raw.paymentMethod || raw.payment_method || orderData.paymentMethod || 'GCash',
+        gcashRefNumber: raw.gcashRefNumber || raw.gcash_ref_number || orderData.gcashRefNumber || '',
+        status: (raw.status || raw.delivery_status || 'CONFIRMED').toUpperCase(),
+        deliveryStatus: (raw.status || raw.delivery_status || 'CONFIRMED').toUpperCase(),
+        totalAmount: Number(raw.totalAmount ?? raw.total_amount ?? raw.total ?? orderData.totalAmount ?? 0),
+        subtotal: Number(raw.subtotal ?? orderData.subtotal ?? 0),
+        shippingFee: Number(raw.shippingFee ?? raw.shipping_fee ?? orderData.shippingFee ?? 0),
+        discountAmount: Number(raw.discountAmount ?? raw.discount_amount ?? raw.discount ?? orderData.discountAmount ?? 0),
+        items: Array.isArray(raw.items) && raw.items.length > 0 ? raw.items : orderData.items,
+        trackingTimeline: raw.trackingTimeline || raw.tracking_steps || [
+          { step: 'Order Placed', time: new Date().toLocaleString(), done: true },
+          { step: 'Payment Review', time: orderData.paymentMethod === 'COD' ? 'Approved (COD)' : 'Payment Verified', done: true },
+          { step: 'Factory Packed', time: 'Estimated 2-4 hours', done: false },
+          { step: 'Out for Delivery', time: 'In dispatch queue', done: false },
+          { step: 'Delivered', time: 'Pending transit', done: false }
+        ]
+      };
 
       const updatedProducts = products.map(prod => {
         const prodId = prod.id || prod.customId;
